@@ -4,8 +4,7 @@
 back-and-forth, which is essentially what an OIDC handshake is.)
 
 A pocket-sized OIDC relying party for kicking the tyres of any OpenID
-Provider you point it at — including the `authentique` OP that lives in the
-parent directory. Punch in an issuer, choose your scopes, pick a flow, and
+Provider you point it at. Punch in an issuer, choose your scopes, pick a flow, and
 it'll walk through the dance and lay the tokens out on the table for you to
 inspect.
 

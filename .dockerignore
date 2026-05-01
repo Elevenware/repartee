@@ -3,8 +3,6 @@
 bff/bff
 .git
 .gitignore
-.claudeignore
 .DS_Store
 README.md
-AGENTS.md
 docker-compose.yml
