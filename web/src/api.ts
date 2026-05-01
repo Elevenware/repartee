@@ -59,3 +59,7 @@ export const bffRuntime: OidcRuntime = {
 }
 
 export const api = bffRuntime
+
+export function fetchConfig(): Promise<{ rp_redirect_uri: string }> {
+  return jsonFetch<{ rp_redirect_uri: string }>('/api/config')
+}

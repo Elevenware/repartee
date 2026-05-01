@@ -1,5 +1,6 @@
 import type { Env } from './env'
 import { callbackHandler } from './handlers/callback'
+import { configHandler } from './handlers/config'
 import { discoverHandler } from './handlers/discover'
 import { introspectHandler } from './handlers/introspect'
 import { logoutHandler } from './handlers/logout'
@@ -14,6 +15,7 @@ export type Handler = (req: Request, env: Env, ctx: ExecutionContext) => Respons
 // Frontend api.ts uses POST for /api/tokens; the Go BFF only registers GET.
 // The Worker accepts both so the existing SPA code keeps working unchanged.
 const routes: Array<[string, string, Handler]> = [
+  ['GET', '/api/config', configHandler],
   ['POST', '/api/discover', discoverHandler],
   ['POST', '/api/start', startHandler],
   ['GET', '/callback', callbackHandler],

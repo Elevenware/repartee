@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { fetchConfig } from './api'
 import { oidcRuntime } from './runtime'
 import type { DiscoverResponse, Flow, TokensState, VerifyResult } from './types'
 import TokenView from './components/TokenView.vue'
@@ -23,6 +24,7 @@ const usePKCE = ref(false)
 
 const tokensState = ref<TokensState | null>(null)
 const verifyResult = ref<VerifyResult | null>(null)
+const rpRedirectUri = ref<string>('')
 
 type Theme = 'light' | 'dark'
 const THEME_KEY = 'repartee:theme'
@@ -185,6 +187,14 @@ function reset() {
 onMounted(async () => {
   loadTheme()
   loadSavedCreds()
+  if (!browserMode) {
+    try {
+      const cfg = await fetchConfig()
+      rpRedirectUri.value = cfg.rp_redirect_uri || ''
+    } catch {
+      // not fatal — leave as empty string
+    }
+  }
   const params = new URLSearchParams(window.location.search)
   if (params.get('error')) {
     error.value = params.get('error') || 'unknown error'
@@ -319,6 +329,9 @@ const canStart = computed(() => !browserMode || !!discovery.value?.capabilities.
         </button>
         <span class="text-xs text-slate-500 dark:text-slate-400">
           Fetches <code class="font-mono">/.well-known/openid-configuration</code> to see what's on offer.
+        </span>
+        <span v-if="!browserMode" class="text-xs text-slate-500 dark:text-slate-400">
+          RP_REDIRECT_URI: <code class="font-mono">{{ rpRedirectUri || '(unknown)' }}</code>
         </span>
         <button
           class="ml-auto text-xs text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 underline"

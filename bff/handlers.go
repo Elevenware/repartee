@@ -338,6 +338,14 @@ func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"redirect": u.String()})
 }
 
+type configResponse struct {
+	RPRedirectURI string `json:"rp_redirect_uri"`
+}
+
+func (h *handlers) config(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, configResponse{RPRedirectURI: h.redirectURI})
+}
+
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)

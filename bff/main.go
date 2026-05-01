@@ -16,6 +16,7 @@ func main() {
 	h := &handlers{sessions: sessions, redirectURI: redirect}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/config", h.config)
 	mux.HandleFunc("POST /api/discover", h.discover)
 	mux.HandleFunc("POST /api/start", h.start)
 	mux.HandleFunc("GET /callback", h.callback)
