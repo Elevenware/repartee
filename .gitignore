@@ -8,3 +8,5 @@ worker/dist/
 shared/node_modules/
 .DS_Store
 **/node_modules
+certbot/cloudflare.ini
+.env
