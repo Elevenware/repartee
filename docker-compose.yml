@@ -12,17 +12,13 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   oidc-provider:
-    image: georgemc/authentique:latest
+    image: georgemc/authentique:v0.1.1
     ports:
       - "8095:8095"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/oidc4j
       SPRING_DATASOURCE_USERNAME: oidc4j
       SPRING_DATASOURCE_PASSWORD: oidc4j
-      # *.localtest.me always resolves to 127.0.0.1 in public DNS. Combined
-      # with the network alias below, this single hostname works from both
-      # sides: the browser hits the host's published port, and other
-      # containers (e.g. repartee) reach the OP via Docker's internal DNS.
       OIDC_ISSUER: ${OIDC_ISSUER:-http://authentique.localtest.me:8095}
       AUTHENTIQUE_BOOTSTRAP_OVERWRITE_EXISTING: ${AUTHENTIQUE_BOOTSTRAP_OVERWRITE_EXISTING:-false}
       AUTHENTIQUE_BOOTSTRAP_ENABLED: "true"
