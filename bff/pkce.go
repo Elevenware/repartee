@@ -1,4 +1,4 @@
-package main
+package bff
 
 import (
 	"crypto/rand"

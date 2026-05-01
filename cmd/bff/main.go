@@ -1,10 +1,15 @@
+// Command bff runs RePartee's HTTP server: the BFF library mounted alongside
+// the built SPA, configured from environment variables.
 package main
 
 import (
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/elevenware/bff"
 )
 
 func main() {
@@ -12,24 +17,19 @@ func main() {
 	redirect := getenv("RP_REDIRECT_URI", "http://localhost:7080/callback")
 	spaDir := getenv("RP_SPA_DIR", filepath.Join("..", "web", "dist"))
 
-	sessions := newSessionStore()
-	h := &handlers{sessions: sessions, redirectURI: redirect}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	b, err := bff.New(redirect, bff.WithLogger(logger))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/discover", h.discover)
-	mux.HandleFunc("POST /api/start", h.start)
-	mux.HandleFunc("GET /callback", h.callback)
-	mux.HandleFunc("GET /api/tokens", h.tokens)
-	mux.HandleFunc("POST /api/verify", h.verify)
-	mux.HandleFunc("POST /api/userinfo", h.userinfo)
-	mux.HandleFunc("POST /api/refresh", h.refresh)
-	mux.HandleFunc("POST /api/introspect", h.introspect)
-	mux.HandleFunc("POST /api/logout", h.logout)
-	mux.HandleFunc("GET /config", h.config)
+	b.Mount(mux)
 	mux.Handle("GET /", spaOrPlaceholder(spaDir))
 
 	logger.Info("starting", "addr", addr, "redirectURI", redirect, "spaDir", spaDir)
-	if err := http.ListenAndServe(addr, loggingMiddleware(mux)); err != nil {
+	if err := http.ListenAndServe(addr, b.LoggingMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}
 }

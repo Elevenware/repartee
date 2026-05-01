@@ -1,4 +1,4 @@
-package main
+package bff
 
 import (
 	"context"
@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-type handlers struct {
-	sessions    *sessionStore
-	redirectURI string
+type server struct {
+	cfg *Config
 }
 
 type discoverRequest struct {
@@ -30,12 +29,12 @@ type capabilities struct {
 }
 
 type discoverResponse struct {
-	Doc          *discoveryDoc   `json:"doc"`
+	Doc          *DiscoveryDoc   `json:"doc"`
 	Raw          json.RawMessage `json:"raw"`
 	Capabilities capabilities    `json:"capabilities"`
 }
 
-func (h *handlers) discover(w http.ResponseWriter, r *http.Request) {
+func (s *server) discover(w http.ResponseWriter, r *http.Request) {
 	var req discoverRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "bad request: "+err.Error())
@@ -43,7 +42,7 @@ func (h *handlers) discover(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	doc, err := fetchDiscovery(ctx, req.Issuer)
+	doc, err := s.fetchDiscovery(ctx, req.Issuer)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
@@ -71,10 +70,10 @@ type startRequest struct {
 
 type startResponse struct {
 	Redirect string         `json:"redirect,omitempty"`
-	Tokens   *tokenResponse `json:"tokens,omitempty"`
+	Tokens   *TokenResponse `json:"tokens,omitempty"`
 }
 
-func (h *handlers) start(w http.ResponseWriter, r *http.Request) {
+func (s *server) start(w http.ResponseWriter, r *http.Request) {
 	var req startRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "bad request: "+err.Error())
@@ -83,18 +82,18 @@ func (h *handlers) start(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	doc, err := fetchDiscovery(ctx, req.Issuer)
+	doc, err := s.fetchDiscovery(ctx, req.Issuer)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 
-	sess := ensureSession(w, r, h.sessions)
+	sess := s.ensureSession(w, r)
 	sess.Issuer = req.Issuer
 	sess.Discovery = doc
 	sess.ClientID = req.ClientID
 	sess.ClientSecret = req.ClientSecret
-	sess.RedirectURI = h.redirectURI
+	sess.RedirectURI = s.cfg.RedirectURI
 	sess.Scopes = req.Scopes
 	sess.Flow = req.Flow
 	sess.Tokens = nil
@@ -104,13 +103,13 @@ func (h *handlers) start(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Flow {
 	case "client_credentials":
-		tr, err := clientCredentials(ctx, sess)
+		tr, err := s.clientCredentials(ctx, sess)
 		if err != nil {
 			writeJSONError(w, http.StatusBadGateway, err.Error())
 			return
 		}
 		sess.Tokens = tr
-		h.sessions.put(sess)
+		s.cfg.SessionStore.Put(sess)
 		writeJSON(w, startResponse{Tokens: tr})
 	case "auth_code", "":
 		sess.Flow = "auth_code"
@@ -130,7 +129,7 @@ func (h *handlers) start(w http.ResponseWriter, r *http.Request) {
 			params.Set("code_challenge", c)
 			params.Set("code_challenge_method", "S256")
 		}
-		h.sessions.put(sess)
+		s.cfg.SessionStore.Put(sess)
 		u, err := url.Parse(doc.AuthorizationEndpoint)
 		if err != nil {
 			writeJSONError(w, http.StatusBadGateway, "bad authorization_endpoint: "+err.Error())
@@ -143,17 +142,17 @@ func (h *handlers) start(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handlers) callback(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFromRequest(r, h.sessions)
+func (s *server) callback(w http.ResponseWriter, r *http.Request) {
+	sess := s.sessionFromRequest(r)
 	if sess == nil {
-		logger.Warn("callback: no session cookie")
+		s.cfg.Logger.Warn("callback: no session cookie")
 		http.Redirect(w, r, "/?error=no_session", http.StatusFound)
 		return
 	}
 	q := r.URL.Query()
 	if errCode := q.Get("error"); errCode != "" {
 		desc := q.Get("error_description")
-		logger.Warn("callback: OP returned error", "errCode", errCode, "desc", desc)
+		s.cfg.Logger.Warn("callback: OP returned error", "errCode", errCode, "desc", desc)
 		msg := errCode
 		if desc != "" {
 			msg += ": " + desc
@@ -162,7 +161,7 @@ func (h *handlers) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if state := q.Get("state"); state != sess.State {
-		logger.Warn("callback: state mismatch", "gotState", state, "expectedState", sess.State)
+		s.cfg.Logger.Warn("callback: state mismatch", "gotState", state, "expectedState", sess.State)
 		http.Redirect(w, r, "/?error=state_mismatch", http.StatusFound)
 		return
 	}
@@ -172,27 +171,27 @@ func (h *handlers) callback(w http.ResponseWriter, r *http.Request) {
 		for k := range q {
 			params = append(params, k)
 		}
-		logger.Warn("callback: missing code", "params", params)
+		s.cfg.Logger.Warn("callback: missing code", "params", params)
 		http.Redirect(w, r, "/?error=missing_code", http.StatusFound)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	logger.Info("callback: exchanging code")
-	tr, err := exchangeCode(ctx, sess, code)
+	s.cfg.Logger.Info("callback: exchanging code")
+	tr, err := s.exchangeCode(ctx, sess, code)
 	if err != nil {
-		logger.Error("callback: token exchange failed", "err", err.Error())
+		s.cfg.Logger.Error("callback: token exchange failed", "err", err.Error())
 		http.Redirect(w, r, "/?error="+url.QueryEscape(err.Error()), http.StatusFound)
 		return
 	}
 	sess.Tokens = tr
-	h.sessions.put(sess)
-	logger.Info("callback: token exchange ok")
+	s.cfg.SessionStore.Put(sess)
+	s.cfg.Logger.Info("callback: token exchange ok")
 	http.Redirect(w, r, "/?ok=1", http.StatusFound)
 }
 
 type tokensResponse struct {
-	Tokens   *tokenResponse `json:"tokens,omitempty"`
+	Tokens   *TokenResponse `json:"tokens,omitempty"`
 	Issuer   string         `json:"issuer,omitempty"`
 	Scopes   []string       `json:"scopes,omitempty"`
 	Flow     string         `json:"flow,omitempty"`
@@ -200,8 +199,8 @@ type tokensResponse struct {
 	JwksURI  string         `json:"jwks_uri,omitempty"`
 }
 
-func (h *handlers) tokens(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFromRequest(r, h.sessions)
+func (s *server) tokens(w http.ResponseWriter, r *http.Request) {
+	sess := s.sessionFromRequest(r)
 	if sess == nil || sess.Tokens == nil {
 		writeJSON(w, tokensResponse{})
 		return
@@ -225,25 +224,25 @@ type verifyRequest struct {
 	Key     string `json:"key,omitempty"`
 }
 
-func (h *handlers) verify(w http.ResponseWriter, r *http.Request) {
+func (s *server) verify(w http.ResponseWriter, r *http.Request) {
 	var req verifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "bad request: "+err.Error())
 		return
 	}
-	sess := sessionFromRequest(r, h.sessions)
+	sess := s.sessionFromRequest(r)
 	var jwksURI string
 	if sess != nil && sess.Discovery != nil {
 		jwksURI = sess.Discovery.JwksURI
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	res := verifyToken(ctx, req.IDToken, req.Key, jwksURI)
+	res := s.verifyToken(ctx, req.IDToken, req.Key, jwksURI)
 	writeJSON(w, res)
 }
 
-func (h *handlers) userinfo(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFromRequest(r, h.sessions)
+func (s *server) userinfo(w http.ResponseWriter, r *http.Request) {
+	sess := s.sessionFromRequest(r)
 	if sess == nil || sess.Tokens == nil || sess.Discovery == nil {
 		writeJSONError(w, http.StatusBadRequest, "no session or tokens")
 		return
@@ -254,11 +253,14 @@ func (h *handlers) userinfo(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", sess.Discovery.UserinfoEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", sess.Discovery.UserinfoEndpoint, nil)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+sess.Tokens.AccessToken)
 	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := s.cfg.HTTPClient.Do(req)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
@@ -270,15 +272,15 @@ func (h *handlers) userinfo(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-func (h *handlers) refresh(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFromRequest(r, h.sessions)
+func (s *server) refresh(w http.ResponseWriter, r *http.Request) {
+	sess := s.sessionFromRequest(r)
 	if sess == nil || sess.Tokens == nil {
 		writeJSONError(w, http.StatusBadRequest, "no session or tokens")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	tr, err := refreshTokens(ctx, sess)
+	tr, err := s.refreshTokens(ctx, sess)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
@@ -287,12 +289,12 @@ func (h *handlers) refresh(w http.ResponseWriter, r *http.Request) {
 		tr.RefreshToken = sess.Tokens.RefreshToken
 	}
 	sess.Tokens = tr
-	h.sessions.put(sess)
+	s.cfg.SessionStore.Put(sess)
 	writeJSON(w, tr)
 }
 
-func (h *handlers) introspect(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFromRequest(r, h.sessions)
+func (s *server) introspect(w http.ResponseWriter, r *http.Request) {
+	sess := s.sessionFromRequest(r)
 	if sess == nil || sess.Tokens == nil || sess.Discovery == nil {
 		writeJSONError(w, http.StatusBadRequest, "no session or tokens")
 		return
@@ -307,12 +309,17 @@ func (h *handlers) introspect(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", sess.Discovery.IntrospectionEndpoint, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", sess.Discovery.IntrospectionEndpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+	// Per RFC 6749 §2.3.1, client_id/client_secret are encoded with
+	// application/x-www-form-urlencoded before use as Basic auth credentials.
 	req.SetBasicAuth(url.QueryEscape(sess.ClientID), url.QueryEscape(sess.ClientSecret))
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := s.cfg.HTTPClient.Do(req)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
@@ -324,8 +331,8 @@ func (h *handlers) introspect(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {
-	sess := sessionFromRequest(r, h.sessions)
+func (s *server) logout(w http.ResponseWriter, r *http.Request) {
+	sess := s.sessionFromRequest(r)
 	if sess == nil || sess.Discovery == nil {
 		writeJSONError(w, http.StatusBadRequest, "no session")
 		return
@@ -338,15 +345,15 @@ func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {
 	if sess.Tokens != nil && sess.Tokens.IDToken != "" {
 		params.Set("id_token_hint", sess.Tokens.IDToken)
 	}
-	params.Set("post_logout_redirect_uri", postLogoutRedirect(h.redirectURI))
+	params.Set("post_logout_redirect_uri", postLogoutRedirect(s.cfg.RedirectURI))
 	u, err := url.Parse(sess.Discovery.EndSessionEndpoint)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	u.RawQuery = params.Encode()
-	h.sessions.remove(sess.ID)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
+	s.cfg.SessionStore.Remove(sess.ID)
+	http.SetCookie(w, &http.Cookie{Name: s.cfg.CookieName, Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, map[string]string{"redirect": u.String()})
 }
 
@@ -387,14 +394,14 @@ type configResponse struct {
 	RPRedirectURI string `json:"rp_redirect_uri"`
 }
 
-func (h *handlers) config(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, configResponse{RPRedirectURI: h.redirectURI})
+func (s *server) config(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, configResponse{RPRedirectURI: s.cfg.RedirectURI})
 }
 
 func postLogoutRedirect(redirectURI string) string {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
-		return "http://localhost:7080/"
+		return "/"
 	}
 	u.Path = "/"
 	u.RawQuery = ""
