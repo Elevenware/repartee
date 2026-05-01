@@ -1,0 +1,8 @@
+# Local-dev secrets for `wrangler dev`. Copy this file to `.dev.vars` (which
+# is gitignored) and fill in real values. For production, use
+# `wrangler secret put COOKIE_SIGNING_KEY` instead — never commit secrets.
+
+# 32+ random bytes, base64-encoded. Used to HMAC the session ID cookie so a
+# tampered cookie can't address an arbitrary Durable Object.
+# Generate one with:  openssl rand -base64 32
+COOKIE_SIGNING_KEY=replace-me-with-base64-of-32-random-bytes

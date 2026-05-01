@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium
+           transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50
+           disabled:cursor-not-allowed dark:focus:ring-offset-slate-950;
+  }
+  .btn-primary {
+    @apply btn bg-indigo-600 text-white hover:bg-indigo-500 focus:ring-indigo-500;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50
+           focus:ring-indigo-500
+           dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700;
+  }
+  .btn-danger {
+    @apply btn bg-rose-600 text-white hover:bg-rose-500 focus:ring-rose-500;
+  }
+  .field {
+    @apply block w-full rounded-md border-0 py-2 px-3 text-slate-900 ring-1 ring-inset
+           ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset
+           focus:ring-indigo-500 text-sm
+           dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700 dark:placeholder:text-slate-500;
+  }
+  .label {
+    @apply block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1;
+  }
+  .card {
+    @apply bg-white dark:bg-slate-900 rounded-lg shadow-sm ring-1 ring-slate-200 dark:ring-slate-800 p-6;
+  }
+  .pill {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .pill-on   { @apply pill bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300; }
+  .pill-off  { @apply pill bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400; }
+  .pill-warn { @apply pill bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300; }
+}
+
+pre.token {
+  @apply font-mono text-xs bg-slate-900 text-slate-100 p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-all
+         dark:bg-black dark:ring-1 dark:ring-slate-800;
+}
+
+pre.json {
+  @apply font-mono text-xs bg-slate-50 text-slate-800 p-4 rounded-md overflow-x-auto ring-1 ring-slate-200
+         dark:bg-slate-950 dark:text-slate-200 dark:ring-slate-800;
+}

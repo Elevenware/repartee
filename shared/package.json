@@ -1,0 +1,12 @@
+{
+  "name": "@repartee/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./contract": "./src/contract.ts",
+    "./capabilities": "./src/capabilities.ts",
+    "./pkce": "./src/pkce.ts",
+    "./jwt": "./src/jwt.ts"
+  }
+}

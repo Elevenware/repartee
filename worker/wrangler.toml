@@ -1,0 +1,27 @@
+name = "repartee-worker"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionStore"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionStore"]
+
+[vars]
+COOKIE_NAME = "repartee_session"
+SESSION_TTL_SECONDS = "3600"
+REDIRECT_URI = "http://localhost:8787/callback"
+
+[env.production.vars]
+COOKIE_NAME = "repartee_session"
+SESSION_TTL_SECONDS = "3600"
+# Override REDIRECT_URI per deployment to match the registered redirect URI on the OP.
+REDIRECT_URI = "https://repartee.example.workers.dev/callback"

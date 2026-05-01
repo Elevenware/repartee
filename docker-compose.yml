@@ -1,0 +1,68 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: oidc4j
+      POSTGRES_USER: oidc4j
+      POSTGRES_PASSWORD: oidc4j
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  oidc-provider:
+    image: georgemc/authentique:latest
+    ports:
+      - "8095:8095"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/oidc4j
+      SPRING_DATASOURCE_USERNAME: oidc4j
+      SPRING_DATASOURCE_PASSWORD: oidc4j
+      # *.localtest.me always resolves to 127.0.0.1 in public DNS. Combined
+      # with the network alias below, this single hostname works from both
+      # sides: the browser hits the host's published port, and other
+      # containers (e.g. repartee) reach the OP via Docker's internal DNS.
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://authentique.localtest.me:8095}
+      AUTHENTIQUE_BOOTSTRAP_OVERWRITE_EXISTING: ${AUTHENTIQUE_BOOTSTRAP_OVERWRITE_EXISTING:-false}
+      AUTHENTIQUE_BOOTSTRAP_ENABLED: "true"
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_SUBJECT: george
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_USERNAME: george
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_PASSWORD: password
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_NAME: George McIntosh
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_GIVEN_NAME: George
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_FAMILY_NAME: McIntosh
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_EMAIL: george@example.com
+      AUTHENTIQUE_BOOTSTRAP_USERS_0_EMAIL_VERIFIED: "true"
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_CLIENT_ID: client1
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_CLIENT_SECRET: client1secret
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_NAME: Starter Portal
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_OWNER_SUBJECT: george
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_GRANT_TYPES_0: authorization_code
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_GRANT_TYPES_1: refresh_token
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_SCOPES_0: openid
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_SCOPES_1: profile
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_SCOPES_2: email
+      AUTHENTIQUE_BOOTSTRAP_CLIENTS_0_REDIRECT_URIS_0: http://repartee.localtest.me:7080/callback
+    depends_on:
+      - postgres
+    networks:
+      default:
+        aliases:
+          - authentique.localtest.me
+
+  # RePartee — a smoke-test relying party. Not part of authentique itself; see
+  # ./repartee/AGENTS.md and ./ADR_relyingpary.md. Lives here only because
+  # it's the most convenient way to get end-to-end OIDC smoke tests with one
+  # `docker compose up`.
+  repartee:
+    build: .
+#    image: repartee:local
+    ports:
+      - "7080:7080"
+    environment:
+      RP_ADDR: ":7080"
+      RP_REDIRECT_URI: ${RP_REDIRECT_URI:-http://repartee.localtest.me:7080/callback}
+
+volumes:
+  pgdata:
