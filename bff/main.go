@@ -25,6 +25,7 @@ func main() {
 	mux.HandleFunc("POST /api/refresh", h.refresh)
 	mux.HandleFunc("POST /api/introspect", h.introspect)
 	mux.HandleFunc("POST /api/logout", h.logout)
+	mux.HandleFunc("GET /config", h.config)
 	mux.Handle("GET /", spaOrPlaceholder(spaDir))
 
 	log.Printf("RePartee BFF listening on %s", addr)
