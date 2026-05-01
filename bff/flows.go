@@ -79,6 +79,8 @@ func (s *server) tokenRequest(ctx context.Context, endpoint string, form url.Val
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+	// Per RFC 6749 §2.3.1, client_id/client_secret are encoded with
+	// application/x-www-form-urlencoded before use as Basic auth credentials.
 	req.SetBasicAuth(url.QueryEscape(clientID), url.QueryEscape(clientSecret))
 
 	resp, err := s.cfg.HTTPClient.Do(req)

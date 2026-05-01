@@ -16,6 +16,20 @@ func TestNew_RequiresRedirectURI(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsRelativeOrUnparseableRedirectURI(t *testing.T) {
+	cases := []string{
+		"/callback",                 // relative path
+		"example.com/callback",      // missing scheme
+		"http://",                   // no host
+		"://broken",                 // unparseable
+	}
+	for _, in := range cases {
+		if _, err := New(in); err == nil {
+			t.Errorf("New(%q) expected error, got nil", in)
+		}
+	}
+}
+
 func TestNew_AppliesDefaults(t *testing.T) {
 	b, err := New("http://x/cb")
 	if err != nil {

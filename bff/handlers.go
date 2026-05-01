@@ -253,7 +253,11 @@ func (s *server) userinfo(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", sess.Discovery.UserinfoEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", sess.Discovery.UserinfoEndpoint, nil)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+sess.Tokens.AccessToken)
 	req.Header.Set("Accept", "application/json")
 	resp, err := s.cfg.HTTPClient.Do(req)
@@ -305,9 +309,15 @@ func (s *server) introspect(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", sess.Discovery.IntrospectionEndpoint, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", sess.Discovery.IntrospectionEndpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+	// Per RFC 6749 §2.3.1, client_id/client_secret are encoded with
+	// application/x-www-form-urlencoded before use as Basic auth credentials.
 	req.SetBasicAuth(url.QueryEscape(sess.ClientID), url.QueryEscape(sess.ClientSecret))
 	resp, err := s.cfg.HTTPClient.Do(req)
 	if err != nil {

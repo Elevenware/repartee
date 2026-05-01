@@ -20,8 +20,10 @@ package bff
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -87,6 +89,13 @@ type BFF struct {
 func New(redirectURI string, opts ...Option) (*BFF, error) {
 	if redirectURI == "" {
 		return nil, errors.New("bff: RedirectURI is required")
+	}
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return nil, fmt.Errorf("bff: invalid RedirectURI: %w", err)
+	}
+	if !u.IsAbs() || u.Host == "" {
+		return nil, errors.New("bff: RedirectURI must be an absolute URL with scheme and host")
 	}
 	cfg := &Config{RedirectURI: redirectURI}
 	for _, opt := range opts {
