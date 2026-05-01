@@ -1,4 +1,4 @@
-module github.com/elevenware/repartee/bff
+module github.com/elevenware/bff
 
 go 1.22
 

@@ -1,4 +1,4 @@
-package main
+package bff
 
 import (
 	"crypto/rand"
@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-const sessionCookie = "repartee_session"
-
-type session struct {
+// Session is the per-browser state tracked by the BFF across the OAuth/OIDC
+// flow and any subsequent token operations.
+type Session struct {
 	ID           string
 	Issuer       string
-	Discovery    *discoveryDoc
+	Discovery    *DiscoveryDoc
 	ClientID     string
 	ClientSecret string
 	RedirectURI  string
@@ -22,33 +22,44 @@ type session struct {
 	State        string
 	Nonce        string
 	CodeVerifier string
-	Tokens       *tokenResponse
+	Tokens       *TokenResponse
 	UpdatedAt    time.Time
 }
 
-type sessionStore struct {
+// SessionStore persists Sessions keyed by ID. Implementations must be safe
+// for concurrent use from multiple goroutines.
+type SessionStore interface {
+	Get(id string) *Session
+	Put(s *Session)
+	Remove(id string)
+}
+
+// MemoryStore is the default in-process SessionStore. It is safe for
+// concurrent use; sessions are lost on restart and never expire.
+type MemoryStore struct {
 	mu       sync.Mutex
-	sessions map[string]*session
+	sessions map[string]*Session
 }
 
-func newSessionStore() *sessionStore {
-	return &sessionStore{sessions: make(map[string]*session)}
+// NewMemoryStore returns an empty in-memory SessionStore.
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{sessions: make(map[string]*Session)}
 }
 
-func (s *sessionStore) get(id string) *session {
+func (s *MemoryStore) Get(id string) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.sessions[id]
 }
 
-func (s *sessionStore) put(sess *session) {
+func (s *MemoryStore) Put(sess *Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess.UpdatedAt = time.Now()
 	s.sessions[sess.ID] = sess
 }
 
-func (s *sessionStore) remove(id string) {
+func (s *MemoryStore) Remove(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.sessions, id)
@@ -62,26 +73,26 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-func sessionFromRequest(r *http.Request, store *sessionStore) *session {
-	c, err := r.Cookie(sessionCookie)
+func (s *server) sessionFromRequest(r *http.Request) *Session {
+	c, err := r.Cookie(s.cfg.CookieName)
 	if err != nil {
 		return nil
 	}
-	return store.get(c.Value)
+	return s.cfg.SessionStore.Get(c.Value)
 }
 
-func ensureSession(w http.ResponseWriter, r *http.Request, store *sessionStore) *session {
-	if s := sessionFromRequest(r, store); s != nil {
-		return s
+func (s *server) ensureSession(w http.ResponseWriter, r *http.Request) *Session {
+	if sess := s.sessionFromRequest(r); sess != nil {
+		return sess
 	}
-	s := &session{ID: newID()}
-	store.put(s)
+	sess := &Session{ID: newID()}
+	s.cfg.SessionStore.Put(sess)
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookie,
-		Value:    s.ID,
+		Name:     s.cfg.CookieName,
+		Value:    sess.ID,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	return s
+	return sess
 }

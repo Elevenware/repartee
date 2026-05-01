@@ -1,4 +1,4 @@
-package main
+package bff
 
 import (
 	"context"
@@ -14,12 +14,13 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type verifyResult struct {
+// VerifyResult is the outcome of an ID-token verification request. Valid is
+// true only when the signature was checked against a key and matched.
+type VerifyResult struct {
 	Valid     bool           `json:"valid"`
 	Algorithm string         `json:"alg,omitempty"`
 	KeyID     string         `json:"kid,omitempty"`
@@ -29,8 +30,8 @@ type verifyResult struct {
 	KeySource string         `json:"key_source,omitempty"`
 }
 
-func verifyToken(ctx context.Context, idToken, keyMaterial, jwksURI string) *verifyResult {
-	res := &verifyResult{}
+func (s *server) verifyToken(ctx context.Context, idToken, keyMaterial, jwksURI string) *VerifyResult {
+	res := &VerifyResult{}
 	header, claims, err := decodeJWTUnsafe(idToken)
 	if err != nil {
 		res.Error = "couldn't decode token: " + err.Error()
@@ -63,7 +64,7 @@ func verifyToken(ctx context.Context, idToken, keyMaterial, jwksURI string) *ver
 		key = k
 		res.KeySource = "user"
 	} else if jwksURI != "" {
-		jwksDoc, err := fetchJWKS(ctx, jwksURI)
+		jwksDoc, err := s.fetchJWKS(ctx, jwksURI)
 		if err != nil {
 			res.Error = "couldn't fetch JWKS: " + err.Error()
 			return res
@@ -200,13 +201,12 @@ func jwkToPublicKey(k *jwk) (any, error) {
 	}
 }
 
-func fetchJWKS(ctx context.Context, uri string) (*jwks, error) {
+func (s *server) fetchJWKS(ctx context.Context, uri string) (*jwks, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := s.cfg.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
