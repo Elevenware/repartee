@@ -60,5 +60,61 @@ services:
       RP_ADDR: ":7080"
       RP_REDIRECT_URI: ${RP_REDIRECT_URI:-http://repartee.localtest.me:7080/callback}
 
+  # TLS reverse proxy. Enabled with `docker compose --profile tls up`.
+  # Terminates TLS for ${AUTHENTIQUE_HOST} and ${REPARTEE_HOST} and proxies
+  # to the OIDC provider and RePartee respectively. Certs come from the
+  # `certbot` service via the shared `letsencrypt` volume; nginx polls
+  # for updates on a timer (see nginx/docker-entrypoint.d/40-reload-loop.sh)
+  # so renewed certs get picked up without restarting the container.
+  nginx:
+    image: nginx:alpine
+    profiles: [tls]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      AUTHENTIQUE_HOST: ${AUTHENTIQUE_HOST:-authentique.oidc4j.com}
+      REPARTEE_HOST: ${REPARTEE_HOST:-repartee.oidc4j.com}
+      NGINX_RELOAD_INTERVAL: ${NGINX_RELOAD_INTERVAL:-21600}
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/docker-entrypoint.d/40-reload-loop.sh:/docker-entrypoint.d/40-reload-loop.sh:ro
+      - letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      certbot:
+        condition: service_healthy
+      oidc-provider:
+        condition: service_started
+      repartee:
+        condition: service_started
+    restart: unless-stopped
+
+  # Obtains and renews a SAN cert covering both hostnames via Cloudflare
+  # DNS-01. Long-running: it does an initial issuance (no-op if a cert is
+  # already on disk) and then loops attempting renewal. The healthcheck
+  # gates the nginx service until the live cert file exists.
+  certbot:
+    image: certbot/dns-cloudflare:latest
+    profiles: [tls]
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - ./certbot/cloudflare.ini:/run/secrets/cloudflare.ini:ro
+      - ./certbot/init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      AUTHENTIQUE_HOST: ${AUTHENTIQUE_HOST:-authentique.oidc4j.com}
+      REPARTEE_HOST: ${REPARTEE_HOST:-repartee.oidc4j.com}
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL}
+      CERTBOT_STAGING: ${CERTBOT_STAGING:-0}
+      CERTBOT_RENEW_INTERVAL: ${CERTBOT_RENEW_INTERVAL:-43200}
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /etc/letsencrypt/live/${AUTHENTIQUE_HOST:-authentique.oidc4j.com}/fullchain.pem"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 300s
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  letsencrypt:

@@ -1,0 +1,9 @@
+# Copy this file to certbot/cloudflare.ini and replace the value below with
+# a Cloudflare API token scoped to the oidc4j.com zone with permission:
+#
+#   Zone : DNS  : Edit  (limited to the oidc4j.com zone)
+#
+# The runtime container copies this to /tmp and chmods it 0600 before use,
+# so the perms on this host file don't matter. The file is gitignored.
+
+dns_cloudflare_api_token = REPLACE_WITH_CLOUDFLARE_API_TOKEN

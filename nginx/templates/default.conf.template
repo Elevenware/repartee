@@ -1,0 +1,42 @@
+server {
+    listen      80 default_server;
+    listen      [::]:80 default_server;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen              443 ssl;
+    listen              [::]:443 ssl;
+    http2               on;
+    server_name         ${AUTHENTIQUE_HOST};
+
+    ssl_certificate     /etc/letsencrypt/live/${AUTHENTIQUE_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${AUTHENTIQUE_HOST}/privkey.pem;
+
+    location / {
+        proxy_pass         http://oidc-provider:8095;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto https;
+    }
+}
+
+server {
+    listen              443 ssl;
+    listen              [::]:443 ssl;
+    http2               on;
+    server_name         ${REPARTEE_HOST};
+
+    ssl_certificate     /etc/letsencrypt/live/${AUTHENTIQUE_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${AUTHENTIQUE_HOST}/privkey.pem;
+
+    location / {
+        proxy_pass         http://repartee:7080;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto https;
+    }
+}
