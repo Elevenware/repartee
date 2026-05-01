@@ -11,6 +11,7 @@ type Stage = 'idle' | 'discovering' | 'discovered' | 'starting' | 'tokens'
 const stage = ref<Stage>('idle')
 const error = ref<string>('')
 const browserMode = oidcRuntime.mode === 'browser'
+const rpRedirectUri = ref<string>('')
 
 const issuer = ref('http://localhost:8080')
 const clientId = ref('')
@@ -182,9 +183,38 @@ function reset() {
   clearCallbackParams()
 }
 
+async function fetchConfig(): Promise<void> {
+  const explicit = import.meta.env.VITE_CONFIG_URL as string | undefined
+  const bffBase = import.meta.env.VITE_BFF_BASE_URL as string | undefined
+  const workerBase = import.meta.env.VITE_WORKER_BASE_URL as string | undefined
+
+  const urls: string[] = explicit
+    ? [explicit]
+    : [
+        // When no explicit base is set, try the origin serving the SPA — both the BFF
+        // and the Cloudflare Worker serve /config at their root, so this works for
+        // single-origin deployments (BFF or Worker hosting the built SPA).
+        bffBase ? `${bffBase}/config` : '/config',
+        ...(workerBase ? [`${workerBase}/config`] : []),
+      ]
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) continue
+      const data = (await res.json()) as { rp_redirect_uri?: string }
+      rpRedirectUri.value = data.rp_redirect_uri ?? ''
+      return
+    } catch {
+      // try next URL
+    }
+  }
+}
+
 onMounted(async () => {
   loadTheme()
   loadSavedCreds()
+  await fetchConfig()
   const params = new URLSearchParams(window.location.search)
   if (params.get('error')) {
     error.value = params.get('error') || 'unknown error'
@@ -319,6 +349,9 @@ const canStart = computed(() => !browserMode || !!discovery.value?.capabilities.
         </button>
         <span class="text-xs text-slate-500 dark:text-slate-400">
           Fetches <code class="font-mono">/.well-known/openid-configuration</code> to see what's on offer.
+        </span>
+        <span class="text-xs text-slate-500 dark:text-slate-400">
+          RP_REDIRECT_URI: <code class="font-mono">{{ rpRedirectUri || '(unknown)' }}</code>
         </span>
         <button
           class="ml-auto text-xs text-slate-500 dark:text-slate-400 hover:text-rose-700 dark:hover:text-rose-400 underline"

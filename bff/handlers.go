@@ -371,6 +371,14 @@ func containsAny(haystack []string, needles ...string) bool {
 	return false
 }
 
+type configResponse struct {
+	RPRedirectURI string `json:"rp_redirect_uri"`
+}
+
+func (h *handlers) config(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, configResponse{RPRedirectURI: h.redirectURI})
+}
+
 func postLogoutRedirect(redirectURI string) string {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
