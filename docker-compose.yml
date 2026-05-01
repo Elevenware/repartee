@@ -67,7 +67,7 @@ services:
   # for updates on a timer (see nginx/docker-entrypoint.d/40-reload-loop.sh)
   # so renewed certs get picked up without restarting the container.
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27.5-alpine
     profiles: [tls]
     ports:
       - "80:80"
@@ -94,7 +94,7 @@ services:
   # already on disk) and then loops attempting renewal. The healthcheck
   # gates the nginx service until the live cert file exists.
   certbot:
-    image: certbot/dns-cloudflare:latest
+    image: certbot/dns-cloudflare:v2.11.0
     profiles: [tls]
     volumes:
       - letsencrypt:/etc/letsencrypt
@@ -108,7 +108,7 @@ services:
       CERTBOT_STAGING: ${CERTBOT_STAGING:-0}
       CERTBOT_RENEW_INTERVAL: ${CERTBOT_RENEW_INTERVAL:-43200}
     healthcheck:
-      test: ["CMD-SHELL", "test -f /etc/letsencrypt/live/${AUTHENTIQUE_HOST:-authentique.oidc4j.com}/fullchain.pem"]
+      test: ["CMD-SHELL", "test -f /etc/letsencrypt/live/$$AUTHENTIQUE_HOST/fullchain.pem"]
       interval: 5s
       timeout: 3s
       retries: 60

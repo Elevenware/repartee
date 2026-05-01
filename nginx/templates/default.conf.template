@@ -2,7 +2,21 @@ server {
     listen      80 default_server;
     listen      [::]:80 default_server;
     server_name _;
-    return 301 https://$host$request_uri;
+    return 444;
+}
+
+server {
+    listen      80;
+    listen      [::]:80;
+    server_name ${AUTHENTIQUE_HOST};
+    return 301 https://${AUTHENTIQUE_HOST}$request_uri;
+}
+
+server {
+    listen      80;
+    listen      [::]:80;
+    server_name ${REPARTEE_HOST};
+    return 301 https://${REPARTEE_HOST}$request_uri;
 }
 
 server {
