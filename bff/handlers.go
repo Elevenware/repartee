@@ -146,36 +146,48 @@ func (h *handlers) start(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) callback(w http.ResponseWriter, r *http.Request) {
 	sess := sessionFromRequest(r, h.sessions)
 	if sess == nil {
+		logger.Warn("callback: no session cookie")
 		http.Redirect(w, r, "/?error=no_session", http.StatusFound)
 		return
 	}
 	q := r.URL.Query()
 	if errCode := q.Get("error"); errCode != "" {
+		desc := q.Get("error_description")
+		logger.Warn("callback: OP returned error", "errCode", errCode, "desc", desc)
 		msg := errCode
-		if d := q.Get("error_description"); d != "" {
-			msg += ": " + d
+		if desc != "" {
+			msg += ": " + desc
 		}
 		http.Redirect(w, r, "/?error="+url.QueryEscape(msg), http.StatusFound)
 		return
 	}
 	if state := q.Get("state"); state != sess.State {
+		logger.Warn("callback: state mismatch", "gotState", state, "expectedState", sess.State)
 		http.Redirect(w, r, "/?error=state_mismatch", http.StatusFound)
 		return
 	}
 	code := q.Get("code")
 	if code == "" {
+		params := make([]string, 0, len(q))
+		for k := range q {
+			params = append(params, k)
+		}
+		logger.Warn("callback: missing code", "params", params)
 		http.Redirect(w, r, "/?error=missing_code", http.StatusFound)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	logger.Info("callback: exchanging code")
 	tr, err := exchangeCode(ctx, sess, code)
 	if err != nil {
+		logger.Error("callback: token exchange failed", "err", err.Error())
 		http.Redirect(w, r, "/?error="+url.QueryEscape(err.Error()), http.StatusFound)
 		return
 	}
 	sess.Tokens = tr
 	h.sessions.put(sess)
+	logger.Info("callback: token exchange ok")
 	http.Redirect(w, r, "/?ok=1", http.StatusFound)
 }
 

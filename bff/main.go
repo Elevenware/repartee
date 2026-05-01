@@ -28,10 +28,8 @@ func main() {
 	mux.HandleFunc("GET /config", h.config)
 	mux.Handle("GET /", spaOrPlaceholder(spaDir))
 
-	log.Printf("RePartee BFF listening on %s", addr)
-	log.Printf("redirect_uri = %s (register this with your OP)", redirect)
-	log.Printf("looking for built SPA in %s", spaDir)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	logger.Info("starting", "addr", addr, "redirectURI", redirect, "spaDir", spaDir)
+	if err := http.ListenAndServe(addr, loggingMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
