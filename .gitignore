@@ -1,4 +1,4 @@
-bff/bff
+cmd/bff/bff
 web/node_modules/
 web/dist/
 worker/node_modules/

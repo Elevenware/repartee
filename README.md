@@ -51,7 +51,7 @@ You'll need Go 1.22+ and Node 20+. Two terminals.
 **Terminal 1 — BFF:**
 
 ```sh
-cd bff
+cd cmd/bff
 go mod tidy        # first time only
 go run .
 ```
@@ -73,7 +73,7 @@ Visit http://localhost:5173. Vite proxies API calls to `:7080`.
 
 ```sh
 cd web && npm run build
-cd ../bff && go run .
+cd ../cmd/bff && go run .
 ```
 
 Then visit http://localhost:7080 — the BFF serves the built SPA.

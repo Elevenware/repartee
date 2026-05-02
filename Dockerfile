@@ -13,11 +13,10 @@ COPY web/ ./
 RUN npm run build
 
 # --- Stage 2: build the BFF ---
-# The deployable binary lives in cmd/bff and consumes the bff/ library via a
-# local replace directive, so both module trees are needed at build time.
+# The deployable binary lives in cmd/bff and pulls the bff library from the
+# public Go module proxy at the version pinned in cmd/bff/go.mod.
 FROM golang:1.22-alpine AS bff-build
 WORKDIR /src
-COPY bff/ ./bff/
 COPY cmd/bff/ ./cmd/bff/
 WORKDIR /src/cmd/bff
 RUN go mod download

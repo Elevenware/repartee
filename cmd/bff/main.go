@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/elevenware/bff"
+	"github.com/elevenware/go-bff"
 )
 
 func main() {
