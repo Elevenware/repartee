@@ -3,11 +3,15 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/elevenware/go-bff"
 )
@@ -29,7 +33,7 @@ func main() {
 	mux.Handle("GET /", spaOrPlaceholder(spaDir))
 
 	logger.Info("starting", "addr", addr, "redirectURI", redirect, "spaDir", spaDir)
-	if err := http.ListenAndServe(addr, b.LoggingMiddleware(mux)); err != nil {
+	if err := http.ListenAndServe(addr, requestLoggingMiddleware(logger, mux)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -39,6 +43,92 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (l *loggingResponseWriter) WriteHeader(status int) {
+	if l.status != 0 {
+		return
+	}
+	l.status = status
+	l.ResponseWriter.WriteHeader(status)
+}
+
+func (l *loggingResponseWriter) Write(b []byte) (int, error) {
+	if l.status == 0 {
+		l.WriteHeader(http.StatusOK)
+	}
+	n, err := l.ResponseWriter.Write(b)
+	l.bytes += n
+	return n, err
+}
+
+func (l *loggingResponseWriter) Unwrap() http.ResponseWriter {
+	return l.ResponseWriter
+}
+
+func requestLoggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		reqID := requestID(r)
+		w.Header().Set("X-Request-ID", reqID)
+
+		rec := &loggingResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(rec, r)
+
+		status := rec.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+
+		attrs := []any{
+			"reqId", reqID,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", status,
+			"bytes", rec.bytes,
+			"durMs", time.Since(start).Milliseconds(),
+			"remoteAddr", clientAddr(r),
+			"userAgent", r.UserAgent(),
+		}
+
+		switch {
+		case status >= 500:
+			logger.Error("request", attrs...)
+		case status >= 400:
+			logger.Warn("request", attrs...)
+		default:
+			logger.Info("request", attrs...)
+		}
+	})
+}
+
+func requestID(r *http.Request) string {
+	if reqID := r.Header.Get("X-Request-ID"); reqID != "" {
+		return reqID
+	}
+
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func clientAddr(r *http.Request) string {
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		addr, _, _ := strings.Cut(forwardedFor, ",")
+		return strings.TrimSpace(addr)
+	}
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		return realIP
+	}
+	return r.RemoteAddr
 }
 
 func spaOrPlaceholder(dir string) http.Handler {
