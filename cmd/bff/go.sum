@@ -1,2 +1,4 @@
+github.com/elevenware/go-bff v0.1.0 h1:Lj+EmTdPyHhDxRgQRMzGnW1nkc1fSEtAc3n2nXPPBvc=
+github.com/elevenware/go-bff v0.1.0/go.mod h1:WCrSHmzJyI7pqMN6mG5E41TcsPUmKrMeLTDWQp7hE8Y=
 github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17wHk=
 github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=

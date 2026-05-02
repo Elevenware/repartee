@@ -15,7 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - bff
           - cmd/bff
     defaults:
       run:
